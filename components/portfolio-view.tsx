@@ -59,7 +59,7 @@ export default function PortfolioView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbols }),
       }) as Promise<PricesResp>,
-    { refreshInterval: 5000 },
+    { refreshInterval: 10000 },
   );
   const prices = pricesResp?.prices ?? {};
 

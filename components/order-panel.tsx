@@ -21,12 +21,12 @@ export default function OrderPanel({ market, isAuthed }: Props) {
   const { data: live } = useSWR<Market>(
     `/api/markets/${encodeURIComponent(market.symbol)}`,
     fetcher,
-    { refreshInterval: 3000, fallbackData: market },
+    { refreshInterval: 10000, fallbackData: market },
   );
   const { data: price } = useSWR<MarketPrice>(
     `/api/markets/${encodeURIComponent(market.symbol)}/prices`,
     fetcher,
-    { refreshInterval: 3000 },
+    { refreshInterval: 10000 },
   );
 
   const yes = live?.yes_price ?? null;

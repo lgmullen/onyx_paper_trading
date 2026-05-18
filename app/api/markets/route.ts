@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit") ?? 100);
-  const limit = Math.min(Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 100), 1000);
+  const limit = Math.min(
+    Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 100),
+    1000,
+  );
   const offsetRaw = Number(url.searchParams.get("offset") ?? 0);
   const offset = Math.max(0, Number.isFinite(offsetRaw) ? offsetRaw : 0);
   const sport = url.searchParams.get("sport") ?? undefined;
