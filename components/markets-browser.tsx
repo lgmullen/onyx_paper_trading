@@ -11,9 +11,13 @@ function priceCell(yes: number | null) {
   if (yes == null) return <span className="text-zinc-400 font-mono">—</span>;
   return (
     <span className="font-mono">
-      <span className="text-green-600 dark:text-green-400">{(yes * 100).toFixed(1)}¢</span>
+      <span className="text-green-600 dark:text-green-400">
+        {(yes * 100).toFixed(1)}¢
+      </span>
       <span className="text-zinc-400 mx-1">/</span>
-      <span className="text-red-600 dark:text-red-400">{((1 - yes) * 100).toFixed(1)}¢</span>
+      <span className="text-red-600 dark:text-red-400">
+        {((1 - yes) * 100).toFixed(1)}¢
+      </span>
     </span>
   );
 }
@@ -21,7 +25,7 @@ function priceCell(yes: number | null) {
 export default function MarketsBrowser() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("open");
-  const [onlyPriced, setOnlyPriced] = useState(true);
+  const [onlyPriced, setOnlyPriced] = useState(false);
   const [limit, setLimit] = useState(200);
 
   const qs = new URLSearchParams();
@@ -59,7 +63,9 @@ export default function MarketsBrowser() {
           </p>
         </div>
         <div className="text-xs text-zinc-500">
-          {isLoading ? "Loading…" : `${filtered.length} of ${markets.length} markets`}
+          {isLoading
+            ? "Loading…"
+            : `${filtered.length} of ${markets.length} markets`}
         </div>
       </div>
 
@@ -111,40 +117,64 @@ export default function MarketsBrowser() {
           <thead className="bg-zinc-50 dark:bg-zinc-900/40 text-left">
             <tr>
               <th className="px-4 py-2 font-medium">Market</th>
-              <th className="px-4 py-2 font-medium hidden md:table-cell">Expires</th>
-              <th className="px-4 py-2 font-medium hidden sm:table-cell">Status</th>
+              <th className="px-4 py-2 font-medium hidden md:table-cell">
+                Expires
+              </th>
+              <th className="px-4 py-2 font-medium hidden sm:table-cell">
+                Status
+              </th>
               <th className="px-4 py-2 font-medium text-right">YES / NO</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((m) => (
-              <tr
-                key={m.id}
-                className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-              >
-                <td className="px-4 py-2">
-                  <Link
-                    href={`/markets/${encodeURIComponent(m.symbol)}`}
-                    className="block"
-                  >
-                    <div className="font-medium">{m.name ?? m.symbol}</div>
-                    <div className="text-xs text-zinc-500 font-mono">{m.symbol}</div>
-                  </Link>
-                </td>
-                <td className="px-4 py-2 hidden md:table-cell text-zinc-500 text-xs">
-                  {m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : "—"}
-                </td>
-                <td className="px-4 py-2 hidden sm:table-cell text-xs">
-                  <span className="inline-block rounded px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800">
-                    {m.status}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">{priceCell(m.yes_price)}</td>
-              </tr>
-            ))}
+            {filtered.map((m) => {
+              const expired =
+                m.expiry_date != null && new Date(m.expiry_date) < new Date();
+              return (
+                <tr
+                  key={m.id}
+                  className="border-t border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                >
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/markets/${encodeURIComponent(m.symbol)}`}
+                      className="block"
+                    >
+                      <div className="font-medium">
+                        {m.name ?? m.symbol}
+                        {expired && (
+                          <span className="ml-2 text-xs font-normal text-red-500">
+                            expired
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-500 font-mono">
+                        {m.symbol}
+                      </div>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 hidden md:table-cell text-zinc-500 text-xs">
+                    {m.expiry_date
+                      ? new Date(m.expiry_date).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-2 hidden sm:table-cell text-xs">
+                    <span className="inline-block rounded px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800">
+                      {m.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {priceCell(m.yes_price)}
+                  </td>
+                </tr>
+              );
+            })}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td
+                  colSpan={4}
+                  className="px-4 py-8 text-center text-sm text-zinc-500"
+                >
                   No markets match your filters.
                 </td>
               </tr>
