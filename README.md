@@ -2,18 +2,20 @@
 
 A paper-trading web app for the Onyx Predictions API. Users sign up, browse live prediction markets, and place simulated buy-YES / buy-NO orders that fill instantly at the current upstream price. Nothing actually executes against Onyx — all orders, positions, and balances are stored in our own database.
 
-- **Live URL:** _add after deploy_
-- **Repo:** _add after push_
+- **Live URL:** https://onyx-paper-trade.vercel.app/
+- **Repo:** https://github.com/lgmullen/onyx_paper_trading
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 16 (App Router, TypeScript, Turbopack) |
-| Auth + DB | Supabase (managed Postgres + auth) |
-| UI | Tailwind v4 |
-| Data fetching | SWR with 3–5s polling |
-| Deploy | Vercel (recommended) |
+| Layer         | Choice                                         |
+| ------------- | ---------------------------------------------- |
+| Framework     | Next.js 16 (App Router, TypeScript, Turbopack) |
+| Auth + DB     | Supabase (managed Postgres + auth)             |
+| UI            | Tailwind v4                                    |
+| Data fetching | SWR with 3–5s polling                          |
+| Deploy        | Vercel (recommended)                           |
+
+
 
 ## Run locally
 
@@ -37,51 +39,19 @@ npm run dev
 
 Sign up, get $1,000 in paper balance, and start trading.
 
-## How it works
-
-### Data flow
-- `app/api/markets/*` proxies the Onyx API server-side. Browser never sees Onyx directly. The Onyx market data endpoints are publicly accessible — no API key needed in this environment. If your environment requires one, set `ONYX_JWT` in `.env.local`.
-- The markets page polls `/api/markets` every 5s via SWR. The market detail page polls the single-market and price endpoints every 3s.
-- The portfolio page batch-fetches prices for every held symbol every 5s and recalculates mark-to-market P&L on the client.
-
-### Order placement
-`POST /api/orders` is the only mutation endpoint. The flow:
-1. Verify the Supabase session (reject if anonymous).
-2. Fetch the current market + price from Onyx server-side (defeats client tampering).
-3. Resolve a fill price (`(bid+ask)/2` → `last_price` → `yes_price`), then take YES or `1 − YES` for NO.
-4. Call the `place_paper_order` Postgres function, which **atomically**:
-   - locks the user's profile row,
-   - checks balance ≥ cost,
-   - debits the balance,
-   - inserts the order,
-   - upserts the position (weighted-average cost basis).
-
-Doing this as a single DB function avoids partial-state races and means RLS still owns authorization.
-
-### P&L
-For each open position:
-- `mark = bid/ask mid` (YES side) or `1 − that` (NO side).
-- `unrealized = (mark − avg_price) × quantity`.
-
-This is mark-to-market against the same mid we'd fill at. A real exchange would mark to bid for longs.
-
-## Major design decisions & trade-offs
-
-- **Supabase over rolling our own auth.** Email/password + cookie sessions + JWT verification in middleware would have eaten an evening. Supabase RLS also means the API surface is genuinely safe even if the route handlers had bugs.
-- **Polling, not WebSockets/SSE.** Onyx doesn't expose a streaming endpoint (the docs show REST only), and SSE through Vercel's serverless layer has gotchas around timeouts. 3s polling is honest about what the upstream supports and is trivial to reason about.
-- **`place_paper_order` as a Postgres function.** Tempting to do balance check → debit → insert from the route handler, but that's three round-trips with race conditions. The DB function fits in 30 lines and makes the operation atomic.
-- **YES/NO from a single price.** The Onyx schema returns one bid/ask pair per market; NO is treated as the algebraic complement (`1 − YES`). That's how Kalshi / Polymarket model it too.
-- **NO real order book.** Fills are instant at the upstream mid. No slippage model, no partial fills, no limit orders. The brief said "fill instantly at the current upstream price" and I took it literally.
-- **No market resolution / settlement.** Orders are recorded but the app never says "you won, paying out $1/share." That would need a worker watching `status` transitions on each held market.
-
 ## What I'd do next given more time
 
-1. **Settlement.** Cron job (or Supabase Edge Function) that watches `expiry_date` + `status`, and when a market resolves credits `qty × $1` for winning side and zero for losing side. Realized P&L table.
-2. **WebSocket prices** if Onyx adds them — or proxy FIX through a small Node worker that broadcasts SSE to clients.
-3. **Limit orders + sell-to-close.** Right now you can only buy YES or NO. A position can be reduced by buying the opposite side (synthetic close), but a real "sell" with a limit price is the obvious next step.
-4. **Charts.** Even just a 24h price spark line per market would massively improve the browse experience.
-5. **Better filtering.** The dev API returns `sport: "OTHER"` for almost everything, so the sport filter is currently a no-op. Pull richer category data from `/events` and `/games/{sport}` and join.
-6. **Tests.** Jest unit tests for `resolveFillPrice` and the position math; one Playwright test that signs up, places an order, and verifies portfolio.
+1. **Settlement.** A price-update webhook would be beneficial to polling that we are currently using. Onyx pushing the changes would be more efficient at scale and could trigger settlement automatically without having to watch the `expiry_date` resolving.
+
+2. **Charts.** From a UX perspective, a 24h price spark line per market would certainly make things a lot more interesting and provide tangible information on how things are resolving.
+
+3. **Better filtering.** The dev API returns `sport: "OTHER"` for almost everything, so the sport filter is currently a no-op. Pull richer category data from `/events` and `/games/{sport}` and join.
+
+4. **Tests.** Jest unit tests for `resolveFillPrice` and the position math; one Playwright test that signs up, places an order, and verifies portfolio.
+
+5. **Server-side price hydration.** A single cron job (Supabase Edge Function or Vercel cron) polls Onyx on a master interval and writes prices into a `market_prices` table. Clients then poll our own DB instead of Onyx directly — eliminates the N-user fan-out problem and makes the app resilient to Onyx downtime.
+
+6. **Redis (at scale).** Not needed now, but if concurrent users grow significantly, Redis as a write-through cache in front of Onyx (or the `market_prices` table) would keep API route latency sub-millisecond under load. The price hydration cron we referenced earlier could serve as an intermediate step — Redis only makes sense after that pattern is in place and read volume justifies the added infrastructure.
 
 ## File map
 
@@ -106,8 +76,8 @@ db/
 proxy.ts                           auth-aware route protection
 ```
 
-## Deploy
+## Design decisions
 
-1. Push to GitHub.
-2. Import into Vercel; set the two `NEXT_PUBLIC_SUPABASE_*` env vars (and `ONYX_JWT` if needed).
-3. Add the deployed origin to Supabase → Authentication → URL Configuration so email confirmation links resolve correctly. (For demo, you can also disable email confirmation in Supabase → Authentication → Providers → Email.)
+**Next.js** — API routes let the Onyx and Supabase keys live server-side only, so they never reach the client. SSR resolves the user session before the page is sent, avoiding auth flashes on the market detail and portfolio pages. Crucially, it collapses frontend, API proxy, and cron jobs into a single Vercel deployment with no separate backend process. The trade-off is App Router complexity (server vs. client component boundaries, SSR-aware cookie handling) that wouldn't be necessary for a purely public, auth-free app.
+
+**Tailwind v4** — utility classes keep styles co-located with markup, which matters for a small codebase where a separate CSS layer would just be indirection. Dark mode, responsive breakpoints, and design tokens are handled without any configuration overhead. The trade-off is verbose class lists in JSX, but at this scale that's preferable to context-switching between files.
